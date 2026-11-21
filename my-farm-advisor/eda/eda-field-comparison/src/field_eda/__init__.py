@@ -20,10 +20,13 @@ from .figures import (
     n3_ndvi_climatology,
     save,
     w1_cumulative_gdd,
+    w2_within_grower_weather,
+    w3_monthly_climatology,
     x4_ndvi_climate,
     x5_area_vs_purity,
+    x6_gdd_rainfall,
 )
-from .maps import m1_grower_map
+from .maps import m1_grower_map, m2_crop_flip_map, m3_ndvi_map
 from .metrics import (
     cumulative_gdd,
     frost_windows,
@@ -59,6 +62,8 @@ __all__ = [
     "cumulative_gdd",
     "frost_windows",
     "m1_grower_map",
+    "m2_crop_flip_map",
+    "m3_ndvi_map",
     "n1_ndvi_distribution",
     "n2_ndvi_by_crop",
     "n3_ndvi_climatology",
@@ -67,6 +72,9 @@ __all__ = [
     "season_summary",
     "shape_metrics",
     "w1_cumulative_gdd",
+    "w2_within_grower_weather",
+    "w3_monthly_climatology",
     "x4_ndvi_climate",
     "x5_area_vs_purity",
+    "x6_gdd_rainfall",
 ]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage A/B example: build the field-year panel and render its figures.
+"""Stage A/B/C example: build the field-year panel and render its figures.
 
 Run against the Assignment 2 runtime::
 
@@ -31,13 +31,18 @@ from field_eda import (  # noqa: E402
     c3_crop_share_diversity,
     coverage_strip,
     m1_grower_map,
+    m2_crop_flip_map,
+    m3_ndvi_map,
     n1_ndvi_distribution,
     n2_ndvi_by_crop,
     n3_ndvi_climatology,
     save,
     w1_cumulative_gdd,
+    w2_within_grower_weather,
+    w3_monthly_climatology,
     x4_ndvi_climate,
     x5_area_vs_purity,
+    x6_gdd_rainfall,
 )
 from field_eda.style import GROWER_ORDER  # noqa: E402
 
@@ -63,7 +68,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=None, help="Output folder (runtime, uncommitted)")
     parser.add_argument("--growers", default=",".join(g.label for g in DEFAULT_GROWERS))
-    parser.add_argument("--no-maps", action="store_true", help="Skip M1 (no basemap download)")
+    parser.add_argument("--no-maps", action="store_true", help="Skip M1/M2/M3 (no basemap download)")
     parser.add_argument("--no-figures", action="store_true", help="Panel/QA only")
     args = parser.parse_args()
 
@@ -114,10 +119,15 @@ def main() -> int:
     results.append(c2_dominant_crop_heatmap(panel))
     results.append(c3_crop_share_diversity(panel))
     results.append(x5_area_vs_purity(panel))
+    results.append(w2_within_grower_weather(panel))
+    results.append(w3_monthly_climatology(panel))
+    results.append(x6_gdd_rainfall(panel))
     if not args.no_maps:
         for grower in GROWER_ORDER:
             if grower in set(frame["grower"]):
                 results.append(m1_grower_map(panel, grower))
+                results.append(m2_crop_flip_map(panel, grower))
+                results.append(m3_ndvi_map(panel, grower))
 
     print()
     for result in results:

@@ -47,7 +47,10 @@ spatial source is too coarse to say anything about position inside a field.
 
 Stage A (built): `coverage`, `N1`, `C1`, `W1`, `M1`.
 Stage B (built): `N2`, `N3`, `X4`, `C2`, `C3`, `X5`.
-Stage C (next): `W2`, `W3`, `X6`, `M2`, `M3`.
+Stage C (built): `W2`, `W3`, `X6`, `M2`, `M3`.
+
+All fifteen statistical outputs and four map families ship; nothing is trimmed
+for the subset layers.
 
 | ID | Level | Plot | Story |
 |---|---|---|---|
@@ -73,14 +76,20 @@ Stage C (next): `W2`, `W3`, `X6`, `M2`, `M3`.
 from field_eda import (
     build_panel, coverage_strip, n1_ndvi_distribution, n2_ndvi_by_crop,
     n3_ndvi_climatology, c1_crop_composition, c2_dominant_crop_heatmap,
-    c3_crop_share_diversity, w1_cumulative_gdd, x4_ndvi_climate,
-    x5_area_vs_purity, m1_grower_map, save,
+    c3_crop_share_diversity, w1_cumulative_gdd, w2_within_grower_weather,
+    w3_monthly_climatology, x4_ndvi_climate, x5_area_vs_purity,
+    x6_gdd_rainfall, m1_grower_map, m2_crop_flip_map, m3_ndvi_map, save,
 )
 
 panel = build_panel()                 # 170 rows, needs DATA_PIPELINE_DATA_ROOT
 print(panel.coverage())               # grower x layer field counts
 strip = coverage_strip(panel)
 save(strip, "coverage.png")           # writing is the caller's job
+
+save(w2_within_grower_weather(panel), "w2.png")
+save(x6_gdd_rainfall(panel), "x6.png")
+save(m2_crop_flip_map(panel, "Iowa"), "m2_iowa.png")
+save(m3_ndvi_map(panel, "Nebraska"), "m3_nebraska.png")
 ```
 
 - `build_panel(growers=..., years=..., layers=..., data_root=..., season=...)`
@@ -90,10 +99,13 @@ save(strip, "coverage.png")           # writing is the caller's job
 - Every figure returns `FigureResult(figure_id, figure, stats, story,
   coverage_note, warnings)`. `stats` carries `n_fields` and `n_field_years`.
   The library never saves, prints, or assembles a report.
-- `m1_grower_map` imports `lib/field_frame.py` and `lib/basemap.py` from the
+- Map functions take a grower name (`"Illinois"`, `"Iowa"`, `"Nebraska"`,
+  `"Delaware"`) and import `lib/field_frame.py` and `lib/basemap.py` from the
   runtime (`<root>/data-pipeline/src/scripts/lib`) so EDA maps share the
   skill's frame and imagery conventions. Statistical figures have no runtime
   library dependency.
+- An elongated grower plan (Delaware) automatically switches `M1`/`M2`/`M3`
+  to per-field small multiples; the caller does not choose the layout.
 
 Run the reviewer example against the runtime:
 
@@ -115,9 +127,9 @@ limits the run.
   greenest *day*. Captions say "annual-mean NDVI".
 - **Weather is coarse.** Fields inside a grower do **not** share one reading:
   Nebraska has three distinct daily series, Illinois four, Iowa four, Marvel
-  one. The spread is small (roughly 20–90 GDD within a grower versus hundreds
-  between growers). W2 must state the fraction, not the earlier "one POWER
-  cell" shorthand.
+  one. The spread is small — up to about 154 GDD and 55 mm within a grower,
+  versus roughly 601 GDD and 206 mm between grower means. W2 must state the
+  fraction, not the earlier "one POWER cell" shorthand.
 - **CDL names come from `crop_code`** via `soil/cdl-cropland/src/cdl_codes.py`.
   The stored `crop_name` strings in the IL/IA tables predate the code fix and
   are wrong for several classes (for example 28 is Oats, 36 is Alfalfa); the
@@ -145,6 +157,31 @@ limits the run.
   and the per-grower ρ are both printed because they disagree: the pooled
   positive value is mostly the Delaware-vs-Corn-Belt contrast, while within a
   grower the slope is flat or negative.
+- **W2 shows the daily-series replication.** One dot is a field's five-season
+  mean and one whisker is its season min–max; marker shape marks the distinct
+  daily weather series. Fields on the same series repeat exactly, so a tight
+  row is a grid artefact: within-grower spread tops out near 154 GDD and 55 mm
+  against roughly 601 GDD and 206 mm between grower means. Field-level climate
+  claims belong at the grower scale.
+- **W3 is a calendar-year climatology.** Monthly rainfall bars sum the full
+  calendar year and the horizontal temperature lines use every month; W2 and
+  X6 use the Mar–Oct season. One representative field per distinct daily
+  series keeps a 10-field grower from outvoting a 4-field one. Do not compare a
+  W3 annual total directly with a W2/X6 season total.
+- **X6 uses one point per `(grower, weather_series, year)`**, not per
+  field-year, because fields sharing a series would stack and inflate every
+  ellipse. Ellipses are 1.5σ (~68 % of a bivariate normal cloud) with crossed
+  centroids; ρ is Spearman rank correlation, not an effect size. The pooled ρ
+  and the per-grower ρ disagree in sign, which is the point of the figure.
+- **M2 is an endpoint statement.** It compares the 2021 and 2025 dominant CDL
+  class. Corn/soy fields alternate annually, so a five-year window usually
+  returns the same parity (28/34 fields "Same"); that is the rotation's
+  signature, not stasis, and C2 carries the intermediate seasons. Delaware's
+  double-crop/produce chain is where the endpoints actually diverge.
+- **M3 uses a fixed 0.2–0.7 NDVI scale** across all grower plates so one plate
+  cannot look greener from a stretched colour ramp. Fields without a composite
+  are hatched in place, never interpolated or dropped; the title switches to
+  "all N fields have a composite" when a plate has no gaps.
 - **`NPK`/yield/economics are out of scope.** So are IL/IA label rewrites and
   any ingest beyond NDVI composites.
 
@@ -155,6 +192,20 @@ limits the run.
   no gain. Metre axes, boxed north arrow, imagery under the field polygons.
 - Elongated plans (Delaware: 1.5 km x 7.3 km of 5–12 ha parcels) use per-field
   small multiples, each with the field-local auto-rotated frame. One page
-  frame would shrink the parcels to specks.
+  frame would shrink the parcels to specks. `M1`, `M2`, and `M3` all switch
+  automatically at the same aspect threshold.
+- Field-number labels are ranked top-to-bottom spatially before choosing which
+  callout sits above or below a field. Lexicographic field ids (`r1`, `r10`,
+  `r2`…) otherwise place `r1` and `r4` adjacent with the same callout side and
+  stack their labels.
 - CDL is masked to the field polygons exactly (no halo). Off-field land use is
   already visible in the imagery and would dominate a small-parcel legend.
+- `M2` fills whole fields with a discrete flip class (corn→soy, soy→corn, same,
+  other change). The legend counts fields, not hectares. "Same" is a darker
+  neutral so it does not vanish under the imagery.
+- `M3` mosaics the 2025 annual-mean NDVI composites inside each polygon on a
+  fixed 0.2–0.7 scale, with a horizontal colourbar. Missing composites are
+  hatched grey; a colourbar is never drawn for an all-missing plate.
+- Every plate keeps the basemap-degrade path: if Esri imagery is unavailable
+  (offline), the plate still renders layers on a light background and returns
+  a warning instead of raising.

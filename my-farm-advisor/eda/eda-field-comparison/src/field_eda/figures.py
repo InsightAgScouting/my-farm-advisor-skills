@@ -1,7 +1,8 @@
-"""Statistical figures for the field EDA subskill (Stages A and B).
+"""Statistical figures for the field EDA subskill (Stages A, B, C).
 
 Stage A: coverage strip, N1, C1, W1.
 Stage B: N2, N3, X4, C2, C3, X5.
+Stage C: W2, W3, X6.
 
 Every function returns a :class:`FigureResult` and writes nothing. The caller
 decides where a PNG goes. ``stats`` always carries the field and field-year
@@ -20,6 +21,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
+from matplotlib.patches import Ellipse  # noqa: E402
 
 from .metrics import cumulative_gdd, ndvi_values  # noqa: E402
 from .panel import FieldPanel  # noqa: E402
@@ -448,8 +451,8 @@ def _spearman(x, y) -> tuple[float, int]:
     return float(pair["x"].rank().corr(pair["y"].rank())), int(len(pair))
 
 
-def _coverage_footer(panel: FieldPanel, fig: plt.Figure, y: float = -0.02) -> str:
-    """One-line NDVI coverage strip for the bottom of every NDVI figure."""
+def ndvi_coverage_text(panel: FieldPanel) -> str:
+    """``NDVI coverage: Illinois 3/10 · ... — 20/34 fields`` for captions."""
     cov = panel.coverage()
     nd = cov[cov["layer"] == "NDVI"].set_index("grower")
     parts: list[str] = []
@@ -461,7 +464,12 @@ def _coverage_footer(panel: FieldPanel, fig: plt.Figure, y: float = -0.02) -> st
         parts.append(f"{grower} {n}/{total}")
         n_sum += n
         t_sum += total
-    text = "NDVI coverage: " + " · ".join(parts) + f" — {n_sum}/{t_sum} fields"
+    return "NDVI coverage: " + " · ".join(parts) + f" — {n_sum}/{t_sum} fields"
+
+
+def _coverage_footer(panel: FieldPanel, fig: plt.Figure, y: float = -0.02) -> str:
+    """One-line NDVI coverage strip for the bottom of every NDVI figure."""
+    text = ndvi_coverage_text(panel)
     fig.text(0.01, y, text, fontsize=7.2, color="#4b5563")
     return text
 
@@ -1205,4 +1213,478 @@ def x5_area_vs_purity(panel: FieldPanel) -> FigureResult:
             "is why purity gets a size-aware confidence cap."
         ),
         warnings=["Per-grower rho for Delaware rests on 4 fields; read it as indicative only."],
+    )
+
+
+# --------------------------------------------------------------------------
+# W2 — across fields: season GDD and rainfall inside each grower
+# --------------------------------------------------------------------------
+def w2_within_grower_weather(panel: FieldPanel) -> FigureResult:
+    """Per-field season GDD and rainfall, one row per grower.
+
+    The question is not whether Illinois is warmer than Iowa — W1/X6 handle
+    that — but how much the fields *inside* one grower differ. Each field gets
+    a dot (mean of its five seasons) and a whisker (season min–max); marker
+    shape is the distinct daily weather series, because fields sharing a
+    series repeat exactly. That repetition is the finding, not an accident.
+    """
+    frame = panel.panel[panel.panel["gdd_total"].notna() & panel.panel["precip_mm"].notna()].copy()
+    if frame.empty:
+        raise ValueError("No season weather in the panel; rebuild with layers including 'weather'")
+    growers = [g for g in GROWER_ORDER if g in set(frame["grower"])]
+    markers = ("o", "s", "^", "D")
+    row_h = 1.98
+    with plt.style.context("seaborn-v0_8-whitegrid"):
+        apply_style()
+        fig, axes = plt.subplots(
+            len(growers), 2, figsize=(11.4, row_h * len(growers) + 1.85),
+            squeeze=False,
+        )
+        by_grower: dict[str, dict[str, Any]] = {}
+        for row, grower in enumerate(growers):
+            sub = frame[frame["grower"] == grower]
+            fields = (
+                sub.groupby("field_id")
+                .agg(
+                    gdd=("gdd_total", "mean"),
+                    gdd_lo=("gdd_total", "min"),
+                    gdd_hi=("gdd_total", "max"),
+                    rain=("precip_mm", "mean"),
+                    rain_lo=("precip_mm", "min"),
+                    rain_hi=("precip_mm", "max"),
+                    series=("weather_series", "first"),
+                    years=("year", "nunique"),
+                )
+                .sort_values("gdd", ascending=False)
+            )
+            n_fields = len(fields)
+            series_ids = sorted(str(s) for s in fields["series"].dropna().unique())
+            marker_for = {sid: markers[i % len(markers)] for i, sid in enumerate(series_ids)}
+            xpos = np.arange(n_fields)
+            color = GROWER_COLORS[grower]
+            for col, (mean_col, lo_col, hi_col, label, unit) in enumerate(
+                (
+                    ("gdd", "gdd_lo", "gdd_hi", "GDD", "GDD"),
+                    ("rain", "rain_lo", "rain_hi", "rain (mm)", "mm"),
+                )
+            ):
+                ax = axes[row, col]
+                ax.axvspan(-0.5, n_fields - 0.5, color="#f8fafc", zorder=0)
+                for i, (_, field) in enumerate(fields.iterrows()):
+                    ax.vlines(
+                        xpos[i], field[lo_col], field[hi_col],
+                        color=color, linewidth=1.3, alpha=0.42, zorder=2,
+                    )
+                    ax.scatter(
+                        xpos[i], field[mean_col],
+                        marker=marker_for.get(str(field["series"]), "o"),
+                        s=42, color=color, edgecolor="white", linewidth=0.7,
+                        zorder=3,
+                    )
+                field_means = fields[mean_col].to_numpy(dtype=float)
+                ax.axhline(
+                    float(np.mean(field_means)), color=color, linewidth=1.0,
+                    linestyle=(0, (3, 3)), alpha=0.75, zorder=1,
+                )
+                lo = float(fields[lo_col].min())
+                hi = float(fields[hi_col].max())
+                span = hi - lo
+                if span <= 1e-9:
+                    span = max(abs(hi) * 0.02, 1.0)
+                ax.set_ylim(lo - 0.18 * span, hi + 0.18 * span)
+                ax.set_xlim(-0.6, n_fields - 0.4)
+                ax.set_xticks(xpos)
+                ax.set_xticklabels(
+                    [_field_short(str(fid)) for fid in fields.index],
+                    fontsize=6.9, rotation=0,
+                )
+                ax.set_ylabel(label, fontsize=7.6)
+                ax.grid(axis="y", alpha=0.32)
+                ax.grid(axis="x", visible=False)
+                spread = float(np.nanmax(field_means) - np.nanmin(field_means))
+                if len(series_ids) == 1:
+                    note = f"1 series · all {n_fields} fields identical"
+                else:
+                    note = f"{len(series_ids)} series · field means span {spread:.1f} {unit}"
+                ax.text(
+                    0.99, 0.975, note, transform=ax.transAxes, ha="right", va="top",
+                    fontsize=6.9, color="#374151",
+                    bbox=dict(boxstyle="round,pad=0.16", fc="white", ec="none", alpha=0.80),
+                )
+                if row == 0:
+                    ax.text(
+                        0.99, 1.10,
+                        f"Season {'GDD (°C-day)' if col == 0 else 'rainfall (mm)'}",
+                        transform=ax.transAxes, ha="right", va="bottom",
+                        fontsize=9.0, fontweight="bold",
+                    )
+            axes[row, 0].text(
+                0.005, 1.035, f"{grower} · {n_fields} fields",
+                transform=axes[row, 0].transAxes, ha="left", va="bottom",
+                fontsize=9.4, fontweight="bold", color=color,
+            )
+            by_grower[grower] = {
+                "n_fields": n_fields,
+                "n_series": len(series_ids),
+                "gdd_field_mean_range": [
+                    round(float(fields["gdd"].min()), 1),
+                    round(float(fields["gdd"].max()), 1),
+                ],
+                "gdd_spread": round(float(fields["gdd"].max() - fields["gdd"].min()), 1),
+                "rain_field_mean_range": [
+                    round(float(fields["rain"].min()), 1),
+                    round(float(fields["rain"].max()), 1),
+                ],
+                "rain_spread": round(float(fields["rain"].max() - fields["rain"].min()), 1),
+                "series_ids": series_ids,
+            }
+
+        handles = [
+            Line2D(
+                [0], [0], marker=markers[i % len(markers)], color="none",
+                markerfacecolor="#6b7280", markeredgecolor="white", markersize=7,
+                label=f"series {i + 1}",
+            )
+            for i in range(max(v["n_series"] for v in by_grower.values()))
+        ]
+        fig.legend(
+            handles=handles, loc="lower center", bbox_to_anchor=(0.5, 0.045),
+            ncol=len(handles), title="Daily weather series (marker shape within a row)",
+            title_fontsize=8, fontsize=8,
+        )
+        gdd_span = max(v["gdd_spread"] for v in by_grower.values())
+        rain_span = max(v["rain_spread"] for v in by_grower.values())
+        fig.text(
+            0.01, 0.008,
+            "Dot = field mean over 2021–2025; whisker = season min–max; fields ordered by mean "
+            "GDD (rainfall keeps that order). Fields that share a daily series repeat exactly, "
+            "so the within-grower spread is a grid artefact, not independent weather. Largest "
+            f"within-grower spread: {gdd_span:.0f} GDD and {rain_span:.0f} mm.",
+            fontsize=7.0, color="#4b5563",
+        )
+        fig.suptitle(
+            "Do fields inside one grower share a climate? Mostly yes — the daily series repeat",
+            fontsize=11, fontweight="bold", y=0.995,
+        )
+        fig.tight_layout(rect=(0, 0.085, 1, 0.965))
+        fig.subplots_adjust(hspace=0.42, wspace=0.16)
+
+    between_gdd = (
+        max(v["gdd_field_mean_range"][1] for v in by_grower.values())
+        - min(v["gdd_field_mean_range"][0] for v in by_grower.values())
+    )
+    between_rain = (
+        max(v["rain_field_mean_range"][1] for v in by_grower.values())
+        - min(v["rain_field_mean_range"][0] for v in by_grower.values())
+    )
+    stats = {
+        "by_grower": by_grower,
+        "between_grower_gdd_spread": round(float(between_gdd), 1),
+        "between_grower_rain_spread": round(float(between_rain), 1),
+        "n_fields": int(frame["field_id"].nunique()),
+        "n_field_years": int(len(frame)),
+    }
+    return FigureResult(
+        figure_id="W2",
+        figure=fig,
+        stats=stats,
+        story=(
+            "Inside a grower the fields are not independent weather stations: they collapse "
+            "onto a handful of daily series, and fields sharing a series repeat exactly. "
+            f"Within-grower spread tops out at {gdd_span:.0f} GDD and {rain_span:.0f} mm, "
+            f"against {between_gdd:.0f} GDD and {between_rain:.0f} mm between the grower "
+            "means. Field-level climate claims belong at the grower scale."
+        ),
+        warnings=[
+            "Fields inside a grower share a coarse POWER grid; marker shape shows the "
+            "distinct series so repeated rows are not read as independent samples."
+        ],
+    )
+
+
+# --------------------------------------------------------------------------
+# W3 — across growers: monthly temperature and rainfall climatology
+# --------------------------------------------------------------------------
+def w3_monthly_climatology(panel: FieldPanel) -> FigureResult:
+    """Grower monthly temperature and rainfall from the daily weather cache.
+
+    One representative field per distinct daily series keeps a 10-field grower
+    from outvoting a 4-field grower and stops fields that share a series from
+    counting five times. Monthly rainfall is a calendar-year total; W2/X6 use
+    the Mar–Oct season, and the footer says so.
+    """
+    daily = panel.daily_weather.copy()
+    if daily.empty:
+        raise ValueError("No daily weather in the panel; rebuild with layers including 'weather'")
+    lookup = panel.panel[["field_id", "weather_series"]].drop_duplicates("field_id")
+    if "weather_series" not in daily.columns:
+        daily = daily.merge(lookup, on="field_id", how="left")
+    daily["date"] = pd.to_datetime(daily["date"])
+    rep = (
+        daily.sort_values("field_id")
+        .drop_duplicates(["grower", "weather_series", "date"])
+        .copy()
+    )
+    rep["year"] = rep["date"].dt.year
+    rep["month"] = rep["date"].dt.month
+    monthly = (
+        rep.groupby(["grower", "weather_series", "year", "month"])
+        .agg(tmean=("T2M", "mean"), rain=("PRECTOTCORR", "sum"))
+        .reset_index()
+    )
+    clim = (
+        monthly.groupby(["grower", "month"])
+        .agg(tmean=("tmean", "mean"), rain=("rain", "mean"), n_years=("year", "nunique"))
+        .reset_index()
+    )
+    growers = [g for g in GROWER_ORDER if g in set(clim["grower"])]
+    months = list(range(1, 13))
+    month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    annual = clim.groupby("grower")["rain"].sum()
+    mean_temp = clim.groupby("grower")["tmean"].mean()
+    series_counts = (
+        panel.panel[panel.panel["grower"].isin(growers)]
+        .groupby("grower")["weather_series"].nunique()
+    )
+
+    with plt.style.context("seaborn-v0_8-whitegrid"):
+        apply_style()
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.6, 4.7))
+        xpos = np.arange(len(months))
+        for ax in (ax1, ax2):
+            ax.axvspan(2.5, 10.5, color="#f1f5f9", zorder=0)
+            ax.set_xticks(xpos)
+            ax.set_xticklabels(month_labels)
+            ax.set_xlim(-0.6, 11.6)
+            ax.grid(axis="x", visible=False)
+        ax1.text(
+            6.5, 0.03, "growing season (Mar–Oct)",
+            transform=ax1.get_xaxis_transform(), ha="center", va="bottom",
+            fontsize=7.2, color="#64748b",
+        )
+
+        for grower in growers:
+            sub = clim[clim["grower"] == grower].set_index("month").reindex(months)
+            color = GROWER_COLORS[grower]
+            ax1.plot(
+                xpos, sub["tmean"].to_numpy(dtype=float), marker="o", markersize=4.0,
+                linewidth=1.9, color=color, label=grower,
+            )
+        ax1.axhline(0.0, color="#94a3b8", linewidth=0.9, linestyle=(0, (2, 3)), zorder=1)
+        ax1.set_ylabel("Monthly mean temperature (°C)")
+        ax1.set_title("Temperature: Delaware's mild winter, Iowa/Nebraska's cold one", loc="left")
+
+        width = 0.19
+        for i, grower in enumerate(growers):
+            sub = clim[clim["grower"] == grower].set_index("month").reindex(months)
+            offset = (i - (len(growers) - 1) / 2.0) * width
+            ax2.bar(
+                xpos + offset, sub["rain"].to_numpy(dtype=float), width=width * 0.94,
+                color=GROWER_COLORS[grower], alpha=0.88, linewidth=0,
+            )
+        ax2.set_ylabel("Monthly total rainfall (mm)")
+        ax2.set_title("Rainfall: same summer peak, very different winter/spring", loc="left")
+
+        handles, _ = ax1.get_legend_handles_labels()
+        fig.legend(
+            handles, [f"{g} — {annual[g]:.0f} mm/yr" for g in growers],
+            loc="lower center", bbox_to_anchor=(0.5, 0.055), ncol=4,
+            title="Grower (calendar-year rainfall total)", title_fontsize=8, fontsize=8,
+        )
+        fig.text(
+            0.01, 0.008,
+            "Monthly climatology 2021–2025, one representative field per distinct daily series "
+            f"(Illinois {series_counts.get('Illinois', 0)}, Iowa {series_counts.get('Iowa', 0)}, "
+            f"Nebraska {series_counts.get('Nebraska', 0)}, Delaware {series_counts.get('Delaware', 0)} "
+            "series). Rainfall bars are calendar-year totals; W2/X6 use the Mar–Oct season.",
+            fontsize=7.0, color="#4b5563",
+        )
+        fig.suptitle(
+            "Same latitude band, different climate: monthly temperature and rainfall by grower",
+            fontsize=11, fontweight="bold", y=1.01,
+        )
+        fig.tight_layout(rect=(0, 0.16, 1, 0.96))
+        fig.subplots_adjust(wspace=0.24)
+
+    stats = {
+        "monthly": {
+            grower: {
+                "tmean_c": [round(float(v), 1) for v in
+                            clim[clim["grower"] == grower].set_index("month")
+                            .reindex(months)["tmean"].to_numpy(dtype=float)],
+                "rain_mm": [round(float(v), 1) for v in
+                            clim[clim["grower"] == grower].set_index("month")
+                            .reindex(months)["rain"].to_numpy(dtype=float)],
+                "annual_rain_mm": round(float(annual[grower]), 1),
+                "annual_mean_c": round(float(mean_temp[grower]), 1),
+                "n_series": int(series_counts.get(grower, 0)),
+            }
+            for grower in growers
+        },
+        "n_fields": int(panel.panel[panel.panel["grower"].isin(growers)]["field_id"].nunique()),
+        "n_field_years": int(len(panel.panel[panel.panel["grower"].isin(growers)])),
+    }
+    driest = min(growers, key=lambda g: annual[g])
+    wettest = max(growers, key=lambda g: annual[g])
+    warmest = max(growers, key=lambda g: mean_temp[g])
+    coolest = min(growers, key=lambda g: mean_temp[g])
+    return FigureResult(
+        figure_id="W3",
+        figure=fig,
+        stats=stats,
+        story=(
+            f"{driest} is the driest grower ({annual[driest]:.0f} mm/yr) and {wettest} the "
+            f"wettest ({annual[wettest]:.0f} mm/yr); {warmest} is warmest on the annual mean, "
+            f"but {coolest} carries the coldest winter. The summer rainfall peak is shared, so "
+            "the growers differ more in the shoulder months than in July."
+        ),
+        warnings=[
+            "Monthly totals here are calendar-year; season totals in W2/X6 use DOY 60–304, "
+            "so the two should not be compared directly."
+        ],
+    )
+
+
+# --------------------------------------------------------------------------
+# X6 — fields and growers: season GDD against rainfall
+# --------------------------------------------------------------------------
+def x6_gdd_rainfall(panel: FieldPanel) -> FigureResult:
+    """Season GDD vs season rainfall with one covariance ellipse per grower.
+
+    One point per distinct ``(grower, weather_series, year)``: fields that share
+    a series would otherwise stack on top of each other and inflate every
+    ellipse. Centroids, n, and per-grower Spearman rho are printed on the plot;
+    the ellipses are 1.5σ (about 68 % of a bivariate normal cloud).
+    """
+    frame = panel.panel.dropna(subset=["gdd_total", "precip_mm"]).copy()
+    if frame.empty:
+        raise ValueError("No season weather in the panel; rebuild with layers including 'weather'")
+    points = frame.drop_duplicates(["grower", "weather_series", "year"])[
+        ["grower", "weather_series", "year", "gdd_total", "precip_mm"]
+    ].copy()
+    growers = [g for g in GROWER_ORDER if g in set(points["grower"])]
+    rows: dict[str, dict[str, Any]] = {}
+    for grower in growers:
+        d = points[points["grower"] == grower]
+        x = d["gdd_total"].to_numpy(dtype=float)
+        y = d["precip_mm"].to_numpy(dtype=float)
+        rho, n = _spearman(x, y)
+        cov = np.cov(x, y, ddof=1)
+        eigval, eigvec = np.linalg.eigh(cov)
+        order = eigval.argsort()[::-1]
+        eigval, eigvec = eigval[order], eigvec[:, order]
+        angle = math.degrees(math.atan2(eigvec[1, 0], eigvec[0, 0]))
+        k = 1.5
+        rows[grower] = {
+            "centroid": [float(x.mean()), float(y.mean())],
+            "rho": None if math.isnan(rho) else round(float(rho), 3),
+            "n_series_years": int(n),
+            "n_fields": int(frame.loc[frame["grower"] == grower, "field_id"].nunique()),
+            "ellipse": {
+                "width": float(2 * k * math.sqrt(max(eigval[0], 0.0))),
+                "height": float(2 * k * math.sqrt(max(eigval[1], 0.0))),
+                "angle": float(angle),
+            },
+        }
+    rho_all, n_all = _spearman(points["gdd_total"], points["precip_mm"])
+    offsets = {
+        "Illinois": (12, 10),
+        "Iowa": (-12, -16),
+        "Nebraska": (12, 8),
+        "Delaware": (-12, -14),
+    }
+
+    with plt.style.context("seaborn-v0_8-whitegrid"):
+        apply_style()
+        fig, ax = plt.subplots(figsize=(8.2, 5.8))
+        for grower in growers:
+            sub = points[points["grower"] == grower]
+            color = GROWER_COLORS[grower]
+            ax.scatter(
+                sub["gdd_total"], sub["precip_mm"], s=34, alpha=0.72,
+                color=color, edgecolor="white", linewidth=0.5, zorder=3,
+            )
+            e = rows[grower]["ellipse"]
+            ax.add_patch(
+                Ellipse(
+                    rows[grower]["centroid"], width=e["width"], height=e["height"],
+                    angle=e["angle"], facecolor=color, edgecolor=color,
+                    alpha=0.10, linewidth=1.5, zorder=1,
+                )
+            )
+            ax.add_patch(
+                Ellipse(
+                    rows[grower]["centroid"], width=e["width"], height=e["height"],
+                    angle=e["angle"], facecolor="none", edgecolor=color,
+                    linewidth=1.4, zorder=2,
+                )
+            )
+            cx, cy = rows[grower]["centroid"]
+            ax.scatter(
+                [cx], [cy], marker="X", s=82, color=color, edgecolor="white",
+                linewidth=0.8, zorder=4,
+            )
+            rho = rows[grower]["rho"]
+            rho_text = "n/a" if rho is None else f"{rho:+.2f}"
+            ax.annotate(
+                f"{grower}\nρ = {rho_text} (n={rows[grower]['n_series_years']})",
+                (cx, cy), xytext=offsets.get(grower, (10, 10)),
+                textcoords="offset points", fontsize=7.6, color=color,
+                fontweight="bold", ha="left" if offsets.get(grower, (0, 0))[0] >= 0 else "right",
+                bbox=dict(boxstyle="round,pad=0.24", fc="white", ec=color, alpha=0.82),
+                zorder=5,
+            )
+        ax.set_xlabel("Season GDD (°C-day, base 10 °C; 1 Mar – 31 Oct)")
+        ax.set_ylabel("Season rainfall (mm, 1 Mar – 31 Oct)")
+        ax.set_title("Climate space: growers separate, seasons move along each cloud")
+        ax.margins(x=0.06, y=0.08)
+        ax.text(
+            0.02, 0.02,
+            f"All series-years  ρ = {rho_all:+.2f}  (n={n_all})\n"
+            "One point per distinct (grower, daily series, year)",
+            transform=ax.transAxes, va="bottom", ha="left", fontsize=7.6,
+            family="monospace",
+            bbox=dict(boxstyle="round,pad=0.32", fc="white", ec="#d1d5db", alpha=0.92),
+        )
+        fig.text(
+            0.01, 0.005,
+            "Ellipses are 1.5σ (~68 % of a bivariate normal cloud); crosses are centroids. "
+            "ρ is Spearman rank correlation, not a causal effect. Fields sharing a daily series "
+            "share their point, so the count is series-years, not field-years.",
+            fontsize=7.0, color="#4b5563",
+        )
+        fig.tight_layout(rect=(0, 0.045, 1, 1.0))
+
+    stats = {
+        "by_grower": rows,
+        "rho_all": None if math.isnan(rho_all) else round(float(rho_all), 3),
+        "n_series_years": int(n_all),
+        "n_fields": int(frame["field_id"].nunique()),
+        "n_field_years": int(len(frame)),
+    }
+    ili = rows.get("Illinois")
+    if ili and ili["rho"] is not None:
+        sign = "positive" if ili["rho"] > 0 else "negative"
+        story = (
+            f"Illinois is the odd grower: its season heat and rainfall rank {sign}ly together "
+            f"(ρ = {ili['rho']:+.2f}), while Iowa, Nebraska, and Delaware run negative because "
+            "their wetter years are cooler. The pooled correlation is weak for exactly that "
+            "reason — it mixes clouds with opposite internal slopes."
+        )
+    else:
+        story = (
+            "The grower clouds sit in different parts of climate space, and their internal "
+            "slopes do not agree in sign, so the pooled correlation is not a summary of any "
+            "one grower."
+        )
+    return FigureResult(
+        figure_id="X6",
+        figure=fig,
+        stats=stats,
+        story=story,
+        warnings=[
+            "Delaware's ellipse rests on five series-years from one daily series; read its "
+            "shape as indicative only."
+        ],
     )

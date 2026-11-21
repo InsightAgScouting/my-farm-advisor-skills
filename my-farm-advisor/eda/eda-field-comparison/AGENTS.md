@@ -15,8 +15,7 @@ unless the routing entry is explicitly part of the request.
 ## Read nearby docs first
 
 Read `GUIDE.md` first. It carries the coverage table, the three-level mapping,
-the full figure catalogue (including the Stage C outputs not built yet), and
-the semantics that must not drift.
+the full figure catalogue (Stages A–C), and the semantics that must not drift.
 
 ## Non-negotiable boundaries
 
