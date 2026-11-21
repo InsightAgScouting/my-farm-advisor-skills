@@ -7,3 +7,4 @@ Open these guides when analyzing agricultural datasets, comparing conditions, or
 - [Correlate Guide](eda-correlate/GUIDE.md) - pairwise and multivariate relationships
 - [Time Series Guide](eda-time-series/GUIDE.md) - seasonal and longitudinal views
 - [Visualize Guide](eda-visualize/GUIDE.md) - charts, plots, and dashboards
+- [Field Comparison EDA](eda-field-comparison/GUIDE.md) - Assignment 2 cross-grower comparison of boundaries, CDL, weather, and NDVI at within-field, within-grower, and across-grower levels
