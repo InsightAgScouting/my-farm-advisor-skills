@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage A example: build the field-year panel and render the first figures.
+"""Stage A/B example: build the field-year panel and render its figures.
 
 Run against the Assignment 2 runtime::
 
@@ -27,11 +27,17 @@ from field_eda import (  # noqa: E402
     DEFAULT_GROWERS,
     build_panel,
     c1_crop_composition,
+    c2_dominant_crop_heatmap,
+    c3_crop_share_diversity,
     coverage_strip,
     m1_grower_map,
     n1_ndvi_distribution,
+    n2_ndvi_by_crop,
+    n3_ndvi_climatology,
     save,
     w1_cumulative_gdd,
+    x4_ndvi_climate,
+    x5_area_vs_purity,
 )
 from field_eda.style import GROWER_ORDER  # noqa: E402
 
@@ -45,7 +51,8 @@ def _default_out() -> Path:
 
 def _print_result(result) -> None:
     print(f"\n[{result.figure_id}] {result.story}")
-    print("  stats:", {k: v for k, v in result.stats.items() if k not in {"fields", "classes", "by_layer", "season_gdd_totals", "representative_fields", "median_by_year", "p95_by_year"}})
+    scalars = {k: v for k, v in result.stats.items() if isinstance(v, (int, float, str))}
+    print("  stats:", scalars)
     if result.coverage_note:
         print("  coverage:", result.coverage_note)
     for warning in result.warnings:
@@ -101,6 +108,12 @@ def main() -> int:
         if grower in set(frame["grower"]):
             results.append(c1_crop_composition(panel, grower))
     results.append(w1_cumulative_gdd(panel))
+    results.append(n2_ndvi_by_crop(panel))
+    results.append(n3_ndvi_climatology(panel))
+    results.append(x4_ndvi_climate(panel))
+    results.append(c2_dominant_crop_heatmap(panel))
+    results.append(c3_crop_share_diversity(panel))
+    results.append(x5_area_vs_purity(panel))
     if not args.no_maps:
         for grower in GROWER_ORDER:
             if grower in set(frame["grower"]):

@@ -12,10 +12,16 @@ report. See ``GUIDE.md`` for the intended chapter order and coverage caveats.
 from .figures import (
     FigureResult,
     c1_crop_composition,
+    c2_dominant_crop_heatmap,
+    c3_crop_share_diversity,
     coverage_strip,
     n1_ndvi_distribution,
+    n2_ndvi_by_crop,
+    n3_ndvi_climatology,
     save,
     w1_cumulative_gdd,
+    x4_ndvi_climate,
+    x5_area_vs_purity,
 )
 from .maps import m1_grower_map
 from .metrics import (
@@ -45,6 +51,8 @@ __all__ = [
     "GrowerSpec",
     "build_panel",
     "c1_crop_composition",
+    "c2_dominant_crop_heatmap",
+    "c3_crop_share_diversity",
     "coverage_strip",
     "crop_group",
     "crop_name",
@@ -52,9 +60,13 @@ __all__ = [
     "frost_windows",
     "m1_grower_map",
     "n1_ndvi_distribution",
+    "n2_ndvi_by_crop",
+    "n3_ndvi_climatology",
     "ndvi_stats",
     "save",
     "season_summary",
     "shape_metrics",
     "w1_cumulative_gdd",
+    "x4_ndvi_climate",
+    "x5_area_vs_purity",
 ]
