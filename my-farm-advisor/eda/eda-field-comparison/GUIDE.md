@@ -8,6 +8,9 @@ inside the reusable code.
 This is the Assignment 2 workflow. Soil (SSURGO) is deliberately **out of
 scope**; this subskill never reads `soil/`.
 
+A one-time submission PDF lives in `report/`; it is not part of the reusable
+subskill and `src/` never imports it.
+
 ## Coverage first
 
 The dataset has **34 fields x 5 years (2021–2025) = 170 field-years**.
