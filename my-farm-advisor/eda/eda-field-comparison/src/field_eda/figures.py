@@ -140,6 +140,115 @@ def coverage_strip(panel: FieldPanel) -> FigureResult:
 
 
 # --------------------------------------------------------------------------
+# A1 — acreage across fields, by grower
+# --------------------------------------------------------------------------
+def a1_field_acreage(panel: FieldPanel) -> FigureResult:
+    """Field-size distribution by grower, one point per field.
+
+    Acreage is a boundary measurement: each field has one area, repeated on
+    five year-rows. The distribution is therefore *across fields*, not across
+    years. Points plus a median bar keep a four-field grower honest where a
+    box plot would imply more shape than four numbers can support.
+    """
+    fields = (
+        panel.panel.dropna(subset=["area_ha"])
+        .groupby(["grower", "field_id"])
+        .agg(area_ha=("area_ha", "first"))
+        .reset_index()
+    )
+    if fields.empty:
+        raise ValueError("No acreage in the panel; rebuild with layers including 'boundaries'")
+    growers = [g for g in GROWER_ORDER if g in set(fields["grower"])]
+    rng = np.random.default_rng(11)
+    by_grower: dict[str, dict[str, Any]] = {}
+
+    with plt.style.context("seaborn-v0_8-whitegrid"):
+        apply_style()
+        fig, ax = plt.subplots(figsize=(8.8, 0.92 * len(growers) + 2.3))
+        ypos = np.arange(len(growers))
+        for i, grower in enumerate(growers):
+            values = fields.loc[fields["grower"] == grower, "area_ha"].to_numpy(dtype=float)
+            color = GROWER_COLORS[grower]
+            ax.vlines(
+                values.min(), i - 0.26, i + 0.26, color=color, linewidth=1.2,
+                alpha=0.35, zorder=1,
+            )
+            ax.scatter(
+                values, i + rng.uniform(-0.15, 0.15, len(values)),
+                s=44, color=color, edgecolor="white", linewidth=0.6, zorder=3,
+            )
+            median = float(np.median(values))
+            ax.vlines(median, i - 0.27, i + 0.27, color="#111827", linewidth=2.0, zorder=4)
+            by_grower[grower] = {
+                "n_fields": int(len(values)),
+                "min_ha": round(float(values.min()), 1),
+                "median_ha": round(median, 1),
+                "max_ha": round(float(values.max()), 1),
+                "total_ha": round(float(values.sum()), 1),
+            }
+            left_side = median > 100
+            ax.text(
+                0.02 if left_side else 0.995, i,
+                f"n={len(values)} · median {median:.0f} ha · {values.min():.0f}–{values.max():.0f} ha",
+                transform=ax.get_yaxis_transform(),
+                ha="left" if left_side else "right", va="center",
+                fontsize=7.6, color="#374151",
+                bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.82),
+            )
+
+        ax.set_xscale("log")
+        ticks = [5, 10, 25, 50, 100, 200, 400]
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([str(t) for t in ticks])
+        ax.minorticks_off()
+        ax.set_xlim(4, 520)
+        ax.set_ylim(-0.6, len(growers) - 0.4)
+        ax.set_yticks(ypos)
+        ax.set_yticklabels(growers)
+        ax.invert_yaxis()
+        ax.grid(axis="y", visible=False)
+        ax.text(
+            22, (len(growers) - 1) / 2 + 0.55, "no fields\nbetween 12 and 184 ha",
+            ha="center", va="center", fontsize=7.4, color="#6b7280", style="italic",
+        )
+        ax.set_xlabel("Field area (ha, log scale)")
+        ax.set_title("Field size separates the growers by two orders of magnitude")
+        fig.text(
+            0.01, 0.005,
+            "One point per field (34). Boundaries are static, so the 170 field-year rows would "
+            "repeat each point five times; a black bar marks the grower median. Delaware's four "
+            "parcels total 30 ha, less than one Corn Belt field.",
+            fontsize=7.0, color="#4b5563",
+        )
+        fig.tight_layout(rect=(0, 0.065, 1, 1.0))
+
+    totals = sorted(by_grower.items(), key=lambda kv: kv[1]["total_ha"], reverse=True)
+    biggest, smallest = totals[0], totals[-1]
+    stats = {
+        "by_grower": by_grower,
+        "n_fields": int(len(fields)),
+        "n_field_years": int(panel.panel["area_ha"].notna().sum()),
+    }
+    return FigureResult(
+        figure_id="A1",
+        figure=fig,
+        stats=stats,
+        story=(
+            f"{biggest[0]} holds the most ground ({biggest[1]['total_ha']:,.0f} ha across "
+            f"{biggest[1]['n_fields']} fields), while {smallest[0]}'s "
+            f"{smallest[1]['n_fields']} parcels total {smallest[1]['total_ha']:.1f} ha. The "
+            "Corn Belt fields sit in a narrow 184–387 ha band; Delaware is a different scale "
+            "of operation, which is why the size comparisons in X5 and X7 use a log axis and "
+            "are read between growers as much as within one."
+        ),
+        warnings=[
+            "Acreage is one measurement per field; this distribution is across fields, not "
+            "across years."
+        ],
+    )
+
+
+# --------------------------------------------------------------------------
 # N1 — within field: NDVI distribution per year
 # --------------------------------------------------------------------------
 def n1_ndvi_distribution(
@@ -1686,5 +1795,180 @@ def x6_gdd_rainfall(panel: FieldPanel) -> FigureResult:
         warnings=[
             "Delaware's ellipse rests on five series-years from one daily series; read its "
             "shape as indicative only."
+        ],
+    )
+
+
+# --------------------------------------------------------------------------
+# X7 — field area vs crop-class diversity
+# --------------------------------------------------------------------------
+def x7_area_vs_diversity(panel: FieldPanel) -> FigureResult:
+    """Field area (log) against the number of distinct planted CDL classes.
+
+    Two panels because the naive version of this question double-counts:
+    panel (a) plots one point per field-year (170), panel (b) collapses the
+    five seasons to one mean per field (34). Area is static, so a rising rho in
+    (a) can be the crop rotation drifting through the same fields; the same rho
+    in (b) is the field-level statement. Rank correlations are printed for both
+    so the two cannot be quoted interchangeably.
+    """
+    if "n_crop_classes" not in panel.panel.columns:
+        raise ValueError(
+            "Panel has no 'n_crop_classes'; rebuild with layers including 'cdl'"
+        )
+    frame = panel.panel.dropna(subset=["n_crop_classes", "area_ha"]).copy()
+    if frame.empty:
+        raise ValueError("No crop-class diversity rows in the panel")
+    fields = (
+        frame.groupby(["grower", "field_id"])
+        .agg(area_ha=("area_ha", "first"), diversity=("n_crop_classes", "mean"),
+             years=("year", "nunique"))
+        .reset_index()
+    )
+    growers = [g for g in GROWER_ORDER if g in set(fields["grower"])]
+
+    def _rho_block(table: pd.DataFrame, ycol: str) -> tuple[dict[str, Any], float, int]:
+        pooled, n_pooled = _spearman(table["area_ha"], table[ycol])
+        block: dict[str, Any] = {
+            "pooled": {"rho": None if math.isnan(pooled) else round(float(pooled), 3),
+                       "n": int(n_pooled)}
+        }
+        for grower in growers:
+            sub = table[table["grower"] == grower]
+            rho, n = _spearman(sub["area_ha"], sub[ycol])
+            block[grower] = {"rho": None if math.isnan(rho) else round(float(rho), 3),
+                             "n": int(n)}
+        return block, pooled, int(n_pooled)
+
+    fy_rho, fy_pooled, fy_n = _rho_block(frame, "n_crop_classes")
+    f_rho, f_pooled, f_n = _rho_block(fields, "diversity")
+
+    rng = np.random.default_rng(7)
+    with plt.style.context("seaborn-v0_8-whitegrid"):
+        apply_style()
+        fig = plt.figure(figsize=(12.2, 5.2))
+        gs = fig.add_gridspec(1, 3, width_ratios=(1.0, 1.0, 0.66))
+        ax1 = fig.add_subplot(gs[0])
+        ax2 = fig.add_subplot(gs[1], sharey=ax1)
+        axt = fig.add_subplot(gs[2])
+        axt.set_axis_off()
+
+        for grower in growers:
+            color = GROWER_COLORS[grower]
+            sub = frame[frame["grower"] == grower]
+            ax1.scatter(
+                sub["area_ha"], sub["n_crop_classes"] + rng.uniform(-0.16, 0.16, len(sub)),
+                s=24, alpha=0.65, color=color, edgecolor="white", linewidth=0.4,
+                label=grower, zorder=3,
+            )
+            subf = fields[fields["grower"] == grower]
+            ax2.scatter(
+                subf["area_ha"], subf["diversity"],
+                s=54, alpha=0.9, color=color, edgecolor="white", linewidth=0.7,
+                label=grower, zorder=3,
+            )
+
+        for ax, title, ylabel in (
+            (ax1, "(a) One point per field-year", "Distinct planted CDL classes"),
+            (ax2, "(b) One point per field (mean of years)", ""),
+        ):
+            ax.set_xscale("log")
+            ticks = [5, 10, 25, 50, 100, 200, 400]
+            ax.set_xticks(ticks)
+            ax.set_xticklabels([str(t) for t in ticks])
+            ax.minorticks_off()
+            ax.set_xlim(4, 460)
+            ax.set_ylim(0.4, 7.7)
+            ax.set_yticks(range(1, 8))
+            ax.set_xlabel("Field area (ha, log scale)")
+            ax.set_title(title, loc="left", fontsize=9.2)
+            ax.grid(axis="x", alpha=0.35)
+        ax1.set_ylabel("Distinct planted CDL classes")
+        ax1.text(
+            21, 5.35, "no fields\n12–184 ha", ha="center", va="center",
+            fontsize=7.2, color="#6b7280", style="italic",
+        )
+        ax2.tick_params(labelleft=False)
+        ax1.legend(loc="upper left", bbox_to_anchor=(0.27, 1.0), ncol=2, fontsize=7.2,
+                   title="Grower", title_fontsize=7.4, framealpha=0.9)
+
+        header = f"{'Grower':<11}{'(a) FY':>9}{'(b) Fld':>10}"
+        lines = [header, "-" * len(header)]
+        def _fmt(entry: dict[str, Any]) -> str:
+            return "n/a" if entry["rho"] is None else f"{entry['rho']:+.2f}"
+
+        lines.append(f"{'Pooled':<11}{_fmt(fy_rho['pooled']):>9}{_fmt(f_rho['pooled']):>10}")
+        for grower in growers:
+            lines.append(f"{grower:<11}{_fmt(fy_rho[grower]):>9}{_fmt(f_rho[grower]):>10}")
+        lines.append("")
+        lines.append(f"{'n':<11}{fy_n:>9}{f_n:>10}")
+
+        axt.text(
+            0.0, 1.0, "Spearman ρ (area vs classes)",
+            transform=axt.transAxes, va="top", ha="left", fontsize=8.4, fontweight="bold",
+        )
+        axt.text(
+            0.0, 0.93, "\n".join(lines), transform=axt.transAxes, va="top", ha="left",
+            fontsize=7.8, family="monospace",
+        )
+        axt.text(
+            0.0, 0.40,
+            "(a) treats the same 34 fields as\n170 observations; a field that\n"
+            "rotates through more crops looks\nlike a bigger, more diverse field.\n"
+            "(b) asks the field-level question.\n\n"
+            "Delaware's four 5–12 ha parcels\ndrive the pooled rise; pooled ρ is\n"
+            "a between-grower contrast.",
+            transform=axt.transAxes, va="top", ha="left", fontsize=7.2, color="#4b5563",
+        )
+        fig.suptitle(
+            "Bigger fields carry more crop classes — mostly between growers, weakly within",
+            fontsize=11, fontweight="bold", y=1.01,
+        )
+        fig.text(
+            0.01, 0.005,
+            "Planted CDL classes only (double-crop codes counted as their own class); "
+            "non-agricultural pixels are excluded. Class counts are 5-year aggregates to 2025 "
+            "and do not distinguish rotation from spatial subdivision.",
+            fontsize=7.0, color="#4b5563",
+        )
+        fig.tight_layout(rect=(0, 0.05, 1, 0.97))
+        fig.subplots_adjust(wspace=0.2)
+
+    stats = {
+        "field_year": fy_rho,
+        "per_field": f_rho,
+        "rho_pooled_field_year": fy_rho["pooled"]["rho"],
+        "rho_pooled_per_field": f_rho["pooled"]["rho"],
+        "n_fields": int(len(fields)),
+        "n_field_years": int(len(frame)),
+        "classes_range": [int(frame["n_crop_classes"].min()),
+                          int(frame["n_crop_classes"].max())],
+    }
+    de_fy = fy_rho.get("Delaware", {}).get("rho")
+    de_f = f_rho.get("Delaware", {}).get("rho")
+    if de_f is not None and de_fy is not None:
+        story = (
+            f"Pooled ρ is {fy_pooled:+.2f} on field-years but {f_pooled:+.2f} once each field "
+            f"counts once, and Delaware alone goes from {de_fy:+.2f} to {de_f:+.2f}. The "
+            "field-year panel is inflated by pseudo-replication, so the field-level panel is "
+            "the one to quote: area and crop-class count move together mainly because four "
+            "tiny Delaware parcels sit at the bottom left, not because big Corn Belt fields "
+            "rotate more."
+        )
+    else:
+        story = (
+            f"Pooled ρ is {fy_pooled:+.2f} on field-years and {f_pooled:+.2f} per field. "
+            "The field-level panel is the one to quote; the field-year panel repeats each "
+            "footprint five times."
+        )
+    return FigureResult(
+        figure_id="X7",
+        figure=fig,
+        stats=stats,
+        story=story,
+        warnings=[
+            "Field-year ρ treats 170 rows from 34 fields as independent observations; "
+            "read panel (b).",
+            "Delaware's per-field ρ rests on 4 parcels and spans the whole area range.",
         ],
     )

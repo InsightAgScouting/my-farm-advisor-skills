@@ -25,6 +25,7 @@ sys.path.insert(0, str(_HERE.parents[1] / "src"))
 
 from field_eda import (  # noqa: E402
     DEFAULT_GROWERS,
+    a1_field_acreage,
     build_panel,
     c1_crop_composition,
     c2_dominant_crop_heatmap,
@@ -43,6 +44,7 @@ from field_eda import (  # noqa: E402
     x4_ndvi_climate,
     x5_area_vs_purity,
     x6_gdd_rainfall,
+    x7_area_vs_diversity,
 )
 from field_eda.style import GROWER_ORDER  # noqa: E402
 
@@ -103,6 +105,7 @@ def main() -> int:
         return 0
 
     results = [coverage_strip(panel)]
+    results.append(a1_field_acreage(panel))
     n1_field = (
         frame[frame["grower"] == "Illinois"].sort_values("field_id")["field_id"].iloc[0]
         if "Illinois" in set(frame["grower"])
@@ -122,6 +125,7 @@ def main() -> int:
     results.append(w2_within_grower_weather(panel))
     results.append(w3_monthly_climatology(panel))
     results.append(x6_gdd_rainfall(panel))
+    results.append(x7_area_vs_diversity(panel))
     if not args.no_maps:
         for grower in GROWER_ORDER:
             if grower in set(frame["grower"]):

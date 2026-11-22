@@ -11,6 +11,7 @@ report. See ``GUIDE.md`` for the intended chapter order and coverage caveats.
 
 from .figures import (
     FigureResult,
+    a1_field_acreage,
     c1_crop_composition,
     c2_dominant_crop_heatmap,
     c3_crop_share_diversity,
@@ -25,6 +26,7 @@ from .figures import (
     x4_ndvi_climate,
     x5_area_vs_purity,
     x6_gdd_rainfall,
+    x7_area_vs_diversity,
 )
 from .maps import m1_grower_map, m2_crop_flip_map, m3_ndvi_map
 from .metrics import (
@@ -52,6 +54,7 @@ __all__ = [
     "FieldPanel",
     "FigureResult",
     "GrowerSpec",
+    "a1_field_acreage",
     "build_panel",
     "c1_crop_composition",
     "c2_dominant_crop_heatmap",
@@ -77,4 +80,5 @@ __all__ = [
     "x4_ndvi_climate",
     "x5_area_vs_purity",
     "x6_gdd_rainfall",
+    "x7_area_vs_diversity",
 ]
