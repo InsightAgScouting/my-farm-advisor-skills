@@ -281,6 +281,15 @@ The umbrella entrypoint is [`SKILL.md`](SKILL.md). From there, the skill routes 
 | Strategy         | Crop strategy and maturity planning workflows                          | [`strategy/INDEX.md`](strategy/INDEX.md)                 |
 | Weather          | NASA POWER weather ingestion and downstream weather analysis           | [`weather/INDEX.md`](weather/INDEX.md)                   |
 
+### Field comparison EDA (`eda/eda-field-comparison/`)
+
+`eda-field-comparison` is the Assignment 2 subskill for comparing four growers across boundaries, CDL cropland, weather, and NDVI at field, field-year, grower, and across-grower levels. It builds one 170-row panel and renders 15 statistical figures plus 3 map families.
+
+- Code: [`eda/eda-field-comparison/src/field_eda/`](eda/eda-field-comparison/src/field_eda) — `build_panel`, figure, and map functions.
+- Outputs: PNGs plus `panel.csv`, `composition.csv`, and `coverage.csv`, written to `${DATA_PIPELINE_DATA_ROOT}/data-pipeline/shared/eda/assignment-2/` (runtime only, not committed).
+- Report: [`eda/eda-field-comparison/report/assignment-2-eda-report.pdf`](eda/eda-field-comparison/report/assignment-2-eda-report.pdf), rebuilt with `report/build_report.py`.
+- Method and caveats: [`eda/eda-field-comparison/GUIDE.md`](eda/eda-field-comparison/GUIDE.md).
+
 ## Typical Workflow
 
 ```mermaid

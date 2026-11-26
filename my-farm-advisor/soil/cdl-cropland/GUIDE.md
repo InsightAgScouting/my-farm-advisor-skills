@@ -194,7 +194,16 @@ uv pip install rasterio geopandas rasterstats requests pandas matplotlib
 | 61   | Fallow/Idle   | Fallow       |
 | 176  | Grass/Pasture | Forage       |
 
-See `src/__init__.py` for the full `CROP_CODES` dictionary (80+ entries).
+The full NASS class legend lives in `src/cdl_codes.py` as `CDL_CLASS_NAMES`
+(135 entries). `cdl_reporting.CDL_CODES` and
+`CDLCroplandSkill.CROP_CODES` both alias it, so reporting and download paths
+cannot disagree.
+
+The legend includes the classes that dominate small produce parcels and
+double-crop acreage, which older copies of this skill dropped silently:
+`21` Barley, `26` Dbl Crop WinWht/Soybeans, `48` Watermelons,
+`121`-`124` Developed, and `254` Dbl Crop Barley/Soybeans. Unmapped codes
+still surface as `Code_<n>` and are filtered out of composition tables.
 
 ## Usage Examples
 
@@ -307,6 +316,36 @@ CSV columns: `field_id`, `year`, `crop_code`, `crop_name`, `dominant_pct`, `tota
 - CDL is classified from satellite imagery acquired primarily June-September
 - Double-cropped areas may show only the primary crop
 - For field boundaries (AOI input), use the `field-boundaries` skill
+
+### Rotation confidence and evidence caps
+
+`summarize_crop_history` only treats a field-year as rotation evidence when its
+dominant **crop** class covers at least `MIN_ROTATION_DOMINANT_PCT` (10 %) of
+the field pixels and `MIN_ROTATION_DOMINANT_PIXELS` (3) pixels. Land-cover
+classes (`ROTATION_EXCLUDED_CODES`: fallow, forest, developed, wetlands, water,
+grass/pasture) stay in the composition tables but never enter the crop
+sequence.
+
+`rotation_confidence` is capped by that evidence:
+
+| Usable crop years | Max confidence |
+| ----------------- | -------------- |
+| 0-1               | `none`         |
+| 2                 | `low`          |
+| 3-4               | `medium`       |
+| 5+                | `high`         |
+
+A median dominant share below `PATCHY_DOMINANT_PCT` (30 %) also caps
+confidence at `low`, and an unusable most-recent year caps it at `medium`. The
+reason is written into `rotation_outlook`, and `rotation_context` records
+`cdl-operational` vs `cdl-contextual` so downstream strategy can tell a solid
+corn/soy history from a 30 m reading of a 6 ha produce plot.
+
+Known divergence: Illinois and Iowa runtime tables were generated before the
+legend fix, so their CSVs can still label code `28` as Alfalfa, `36` as Forest,
+`38` as Grassland, `43` as Open Water and `63` as Other. Re-running
+`download_cdl.py --force` for those farms reconciles them; they were left as-is
+on purpose when the Nebraska and Marvel runs were refreshed.
 
 ## Environment Variables
 
