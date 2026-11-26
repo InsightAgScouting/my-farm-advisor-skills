@@ -2,13 +2,13 @@
 """Build the one-time Assignment 2 EDA report PDF.
 
 This is not part of the reusable subskill. It is the "one-off report script"
-allowed by the local AGENTS.md: it reads the PNGs and CSVs the subskill already
-wrote under the runtime output folder and assembles a single PDF in ``report/``.
+allowed by the local AGENTS.md: it reads the PNGs and CSVs the example wrote to
+``eda-field-comparison/output/`` and assembles a single PDF in ``report/``.
 Nothing here is imported by ``src/field_eda/``, and nothing here computes a new
 statistic — tables are re-derived from ``panel.csv`` only to keep the report's
 counts consistent with the figures.
 
-Usage::
+Usage (the venv lives in the runtime; the figures do not)::
 
     export DATA_PIPELINE_DATA_ROOT=$HOME/my-farm-advisor-runtime
     $DATA_PIPELINE_DATA_ROOT/data-pipeline/.venv/bin/python \
@@ -21,7 +21,6 @@ the figures change. Soil is deliberately absent (see the limitations page).
 from __future__ import annotations
 
 import argparse
-import os
 import textwrap
 from pathlib import Path
 
@@ -249,12 +248,7 @@ def grower_tables(panel: pd.DataFrame) -> tuple[list[str], list[str]]:
 
 
 def main() -> int:
-    root = os.environ.get("DATA_PIPELINE_DATA_ROOT")
-    if not root:
-        raise SystemExit("DATA_PIPELINE_DATA_ROOT is not set")
-    default_images = (
-        Path(root).expanduser() / "data-pipeline" / "shared" / "eda" / "assignment-2"
-    )
+    default_images = Path(__file__).resolve().parents[1] / "output"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--images", type=Path, default=default_images,
                         help="Folder with the subskill's rendered PNGs and CSVs")
@@ -559,8 +553,9 @@ def main() -> int:
     y -= 0.004
     y = para(fig, y,
              "Artifacts: panel.csv (170 × 41), composition.csv and coverage.csv, plus 30 PNGs, all "
-             "written to ${DATA_PIPELINE_DATA_ROOT}/data-pipeline/shared/eda/assignment-2/ and left "
-             "uncommitted. The reusable code, its GUIDE and the validator remain in "
+             "written to eda-field-comparison/output/ (gitignored, not committed); the reviewed "
+             "subset is snapshotted in eda-field-comparison/examples/output/. The reusable code, "
+             "its GUIDE and the validator remain in "
              "my-farm-advisor/eda/eda-field-comparison/ on the assignment-2 branch.",
              size=7.4, color=MUTED)
     report.save(fig)

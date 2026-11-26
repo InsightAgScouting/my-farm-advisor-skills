@@ -8,13 +8,13 @@ Run against the Assignment 2 runtime::
 
 Nothing here belongs to the reusable subskill. The script is the reviewer's
 handle: it prints panel shape, coverage, and per-figure stats, and writes PNGs
-to ``<runtime>/data-pipeline/shared/eda/assignment-2/`` (never committed).
+and CSVs to ``output/`` beside this folder. That folder is gitignored: inputs
+come from the runtime, generated files stay out of Git.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -50,10 +50,12 @@ from field_eda.style import GROWER_ORDER  # noqa: E402
 
 
 def _default_out() -> Path:
-    root = os.environ.get("DATA_PIPELINE_DATA_ROOT")
-    if not root:
-        raise SystemExit("DATA_PIPELINE_DATA_ROOT is not set")
-    return Path(root).expanduser() / "data-pipeline" / "shared" / "eda" / "assignment-2"
+    """Repo-local, gitignored output folder beside ``examples/``.
+
+    The panel still *reads* the runtime (``DATA_PIPELINE_DATA_ROOT``); only the
+    rendered figures and CSVs are written here.
+    """
+    return _HERE.parents[1] / "output"
 
 
 def _print_result(result) -> None:
@@ -68,7 +70,8 @@ def _print_result(result) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=None, help="Output folder (runtime, uncommitted)")
+    parser.add_argument("--out", type=Path, default=None,
+                        help="Output folder (default: eda-field-comparison/output/, gitignored)")
     parser.add_argument("--growers", default=",".join(g.label for g in DEFAULT_GROWERS))
     parser.add_argument("--no-maps", action="store_true", help="Skip M1/M2/M3 (no basemap download)")
     parser.add_argument("--no-figures", action="store_true", help="Panel/QA only")

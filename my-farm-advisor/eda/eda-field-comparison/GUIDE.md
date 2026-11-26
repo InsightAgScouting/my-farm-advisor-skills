@@ -125,9 +125,9 @@ $DATA_PIPELINE_DATA_ROOT/data-pipeline/.venv/bin/python examples/build_panel.py
 ```
 
 Outputs go to
-`${DATA_PIPELINE_DATA_ROOT}/data-pipeline/shared/eda/assignment-2/` and stay
-uncommitted. `--no-maps` skips the basemap download; `--growers Illinois,Iowa`
-limits the run.
+`my-farm-advisor/eda/eda-field-comparison/output/`, which is gitignored; the
+reviewed subset is committed in `examples/output/`. `--no-maps` skips the
+basemap download; `--growers Illinois,Iowa` limits the run.
 
 ## Semantics that must not drift
 

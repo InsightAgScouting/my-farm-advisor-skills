@@ -9,9 +9,8 @@ read it, and rebuilding requires the runtime data.
   Scope, grower locations, field counts and layers, comparison levels, what the
   statistical figures and correlations show, what the maps show, limitations,
   and the soil-out-of-scope statement.
-- `build_report.py` — regenerates the PDF from
-  `${DATA_PIPELINE_DATA_ROOT}/data-pipeline/shared/eda/assignment-2/`
-  (`panel.csv` plus the rendered PNGs).
+- `build_report.py` — regenerates the PDF from `../output/` (gitignored):
+  `panel.csv` plus the rendered PNGs.
 
 ## Rebuild
 

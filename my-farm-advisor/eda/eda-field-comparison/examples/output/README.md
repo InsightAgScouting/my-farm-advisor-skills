@@ -2,9 +2,8 @@
 
 Curated PNG snapshots of the figures `examples/build_panel.py` renders, kept in
 Git so the results can be reviewed without a runtime. They are **snapshots, not
-the write path**: the script itself still writes to
-`${DATA_PIPELINE_DATA_ROOT}/data-pipeline/shared/eda/assignment-2/`, and nothing
-here is read by `src/field_eda/`.
+the write path**: the script writes to `../output/`, which is gitignored, and
+nothing here is read by `src/field_eda/`.
 
 ## Regenerate
 
@@ -16,7 +15,7 @@ $DATA_PIPELINE_DATA_ROOT/data-pipeline/.venv/bin/python \
     examples/build_panel.py                # adds M1/M2/M3 (needs basemap tiles)
 ```
 
-Copy the PNGs you want to refresh from the runtime folder into this one.
+Copy the PNGs you want to refresh from `../output/` into this one.
 
 ## What is here
 
@@ -36,10 +35,9 @@ needed.
 ## What is deliberately not here
 
 - **The nine large map plates** — `m1/m2/m3` for Illinois, Iowa and Nebraska run
-  2.2–3.2 MB each. They stay in the runtime and are viewable through the report.
+  2.2–3.2 MB each. They stay in `../output/` and are viewable through the report.
 - **The CSVs** — `panel.csv` carries per-field `lat`/`lon`, so it is kept out of
-  the repository. `composition.csv` and `coverage.csv` live beside it in the
-  runtime folder.
+  the repository. All three CSVs stay in `../output/` beside the PNGs.
 - **The full-resolution report figures** — `report/assignment-2-eda-report.pdf`
   embeds them at 95 dpi, which keeps the artifact under 1 MB.
 

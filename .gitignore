@@ -10,6 +10,8 @@ build/
 out/
 coverage/
 *.log
+# eda-field-comparison renders here; examples/output/ holds the reviewed snapshots.
+my-farm-advisor/eda/eda-field-comparison/output/
 
 # Runtime geodata payloads
 countries.geojson

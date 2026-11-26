@@ -25,8 +25,10 @@ the full figure catalogue (Stages A–C), and the semantics that must not drift.
   only `examples/` or a one-off report script writes PNG/CSV. Report assembly
   is not part of this subskill.
 - **No HTML, no dashboard, no CLI.** Static matplotlib PNGs only.
-- **Runtime data stays in the runtime.** Never write under the skill checkout;
-  preview outputs go to `${DATA_PIPELINE_DATA_ROOT}/data-pipeline/shared/eda/`.
+- **Runtime inputs, local outputs.** The panel reads the runtime
+  (`${DATA_PIPELINE_DATA_ROOT}`) but generated figures and CSVs go to
+  `output/` in this folder, which is gitignored. Never commit them; the
+  reviewed subset lives in `examples/output/`.
 
 ## Runtime contract
 
