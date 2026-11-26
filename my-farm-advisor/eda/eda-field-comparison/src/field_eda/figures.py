@@ -1284,10 +1284,12 @@ def x5_area_vs_purity(panel: FieldPanel) -> FigureResult:
             entry = rho_by_grower[grower]
             value = "  n/a" if entry["rho"] is None else f"{entry['rho']:+.2f}"
             lines.append(f"{grower:<9} ρ = {value}  (n={entry['n']})")
+        # Lower right is the only empty corner: every field is at least 69 % pure
+        # and the small parcels sit far left, so the box covers no data point.
         ax.text(
-            0.02, 0.97, "\n".join(lines), transform=ax.transAxes, va="top", ha="left",
+            0.98, 0.42, "\n".join(lines), transform=ax.transAxes, va="top", ha="right",
             fontsize=7.6, family="monospace",
-            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="#d1d5db", alpha=0.92),
+            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="#d1d5db"),
         )
         fig.text(
             0.01, 0.005,
@@ -1878,7 +1880,7 @@ def x7_area_vs_diversity(panel: FieldPanel) -> FigureResult:
             ax.set_xticklabels([str(t) for t in ticks])
             ax.minorticks_off()
             ax.set_xlim(4, 460)
-            ax.set_ylim(0.4, 7.7)
+            ax.set_ylim(0.4, 8.8)
             ax.set_yticks(range(1, 8))
             ax.set_xlabel("Field area (ha, log scale)")
             ax.set_title(title, loc="left", fontsize=9.2)
